@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.77.0-rc.4] - 2026-10-14
+
+### Changed
+
+- The Sendspin library is updated to aiosendspin 10.0.2, which carries the
+  upstream bug fixes since 10.0.0, including pairing records that stay
+  readable and match after an interrupted pairing.
+
 ### Fixed
 
 - Changing the volume or mute with the speaker's own buttons now moves the
