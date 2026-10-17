@@ -104,6 +104,21 @@ async def _correct_other_devices_routing(triggering_mgr: BluetoothManager) -> No
             logger.debug("[%s] Sink routing correction failed: %s", client.player_name, exc)
 
 
+async def _configure_audio_on_existing_link(mgr: BluetoothManager, loop) -> bool:
+    """Request A2DP Sink, then configure audio, for a link the manager did not open.
+
+    A speaker that reconnects itself, or a link opened by the pair flow,
+    can come up over LE only; the explicit profile request forces BR/EDR
+    before the sink lookup starts.  The request is best-effort: a failure
+    must not stop audio configuration.
+    """
+    try:
+        await loop.run_in_executor(bt_executor(), mgr.request_a2dp_sink_profile)
+    except Exception as exc:
+        logger.debug("[%s] A2DP Sink request on existing link raised: %s", mgr.device_name, exc)
+    return bool(await loop.run_in_executor(bt_executor(), mgr.configure_bluetooth_audio))
+
+
 async def _finish_auto_reclaim(mgr: BluetoothManager, loop, *, connected: bool | None = None) -> bool:
     """Reclaim after auto-release and bring the player back up (#349/#350).
 
@@ -115,7 +130,7 @@ async def _finish_auto_reclaim(mgr: BluetoothManager, loop, *, connected: bool |
     """
     if not mgr.maybe_auto_reclaim(connected=connected):
         return False
-    await loop.run_in_executor(bt_executor(), mgr.configure_bluetooth_audio)
+    await _configure_audio_on_existing_link(mgr, loop)
     mgr.policy.record_reconnect()
     if mgr.host:
         mgr.host.update_status(
@@ -150,7 +165,7 @@ async def _start_player_on_established_link(mgr: BluetoothManager, loop) -> bool
         return False
     try:
         logger.info("[%s] Connected without a player — configuring audio and starting sendspin", mgr.device_name)
-        await loop.run_in_executor(bt_executor(), mgr.configure_bluetooth_audio)
+        await _configure_audio_on_existing_link(mgr, loop)
     finally:
         lease.release()
     if mgr.host:
@@ -536,7 +551,7 @@ async def _inner_dbus_monitor(
                     logger.debug("re-read connected state failed: %s", exc)
                 if mgr.connected:
                     logger.info("[%s] External reconnect detected, configuring audio...", mgr.device_name)
-                    if await loop.run_in_executor(bt_executor(), mgr.configure_bluetooth_audio):
+                    if await _configure_audio_on_existing_link(mgr, loop):
                         mgr.reconnect_attempt = 0
                     mgr.policy.record_reconnect()
                     if mgr.host:

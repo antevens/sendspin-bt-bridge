@@ -789,6 +789,14 @@ class BluetoothManager:
             self._paired_unknown_count = 0
             if self._abort_connect_if_cancelled():
                 return False
+            # A link opened elsewhere may be LE-only; ask for A2DP Sink
+            # before looking for the sink. Best-effort, as after pairing.
+            try:
+                self._force_a2dp_sink_profile()
+            except Exception as exc:
+                logger.debug("[%s] A2DP Sink hint on existing link raised: %s", self.device_name, exc)
+            if self._abort_connect_if_cancelled():
+                return False
             # Ensure audio is configured
             self.configure_bluetooth_audio()
             return not self._abort_connect_if_cancelled()
@@ -1172,6 +1180,15 @@ class BluetoothManager:
                 reason,
             )
         return False
+
+    def request_a2dp_sink_profile(self) -> bool:
+        """Ask BlueZ for the A2DP Sink profile on a link this manager did not open.
+
+        A dual-mode speaker can come up over LE only when something other
+        than this manager connected it; the explicit profile request forces
+        BR/EDR so a sink can appear.  Same semantics as the post-connect hint.
+        """
+        return self._force_a2dp_sink_profile()
 
     def _reconnect_delay(self, attempt: int) -> float:
         """Backoff for the next attempt — the policy's arithmetic."""
